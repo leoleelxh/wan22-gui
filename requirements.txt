@@ -1,0 +1,25 @@
+# Wan2.2-Animate GUI Requirements
+# These are the additional requirements for the GUI interface
+# You still need to install the base Wan2.2 requirements
+
+# Web Interface
+gradio>=5.47.0
+
+# Base requirements (should be installed from Wan2.2)
+# torch>=2.4.0
+# torchvision>=0.19.0
+# torchaudio
+# opencv-python>=4.9.0.80
+# diffusers>=0.31.0
+# transformers<=4.51.3,>=4.49.0
+# accelerate>=1.1.1
+
+# Additional packages for Animate functionality
+# librosa  # Will be installed automatically when needed
+# numpy<2,>=1.23.5
+# pillow<12.0,>=8.0
+
+# Note: This file only includes GUI-specific requirements
+# Please install Wan2.2 base requirements first:
+# pip install -r requirements.txt (from Wan2.2 project)
+# pip install -r requirements_animate.txt (from Wan2.2 project)
