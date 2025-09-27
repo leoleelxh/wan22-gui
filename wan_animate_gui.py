@@ -18,6 +18,19 @@ import gradio as gr
 # 添加当前目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# 导入模型管理器
+try:
+    from model_manager import ModelManager
+except ImportError:
+    # 如果无法导入，创建一个简单的占位符
+    class ModelManager:
+        def __init__(self, base_dir="."):
+            self.base_dir = base_dir
+        def check_model_exists(self, model_name):
+            return False, "Model manager not available"
+        def download_model(self, model_name, progress_callback=None):
+            return False, "Model manager not available"
+
 class LanguageManager:
     """多语言管理器"""
 
@@ -56,8 +69,19 @@ class LanguageManager:
             'use_relighting_info': '仅在替换模式下可用',
             'animation_help': '动画模式：模型生成一个角色图像的视频，模仿输入视频中的人体动作',
             'replacement_help': '替换模式：模型将角色图像替换到输入视频中',
-            'gpu_memory_warning': '注意：此操作需要大量GPU内存。建议使用80GB+显存的GPU',
-            'install_notice': '确保已安装所有依赖项和模型检查点'
+            'gpu_memory_warning': '注意：此操作需要大量GPU内存。24GB显存可运行（速度较慢），建议80GB+',
+            'install_notice': '确保已安装所有依赖项和模型检查点',
+            'model_download': '模型下载',
+            'download_model_btn': '下载模型',
+            'model_status': '模型状态',
+            'model_found': '模型已就绪',
+            'model_missing': '模型未找到',
+            'downloading_model': '正在下载模型...',
+            'download_complete': '模型下载完成',
+            'download_failed': '模型下载失败',
+            'auto_download_info': '系统将自动检测并下载所需模型',
+            'disk_space_warning': '下载需要约30GB磁盘空间',
+            'model_path_auto': '将自动设置为下载的模型路径'
         },
         'en': {
             'title': 'Wan2.2-Animate: Character Animation & Replacement',
@@ -88,8 +112,19 @@ class LanguageManager:
             'use_relighting_info': 'Only available in replacement mode',
             'animation_help': 'Animation Mode: Generate a video of the character image mimicking human motion in the input video',
             'replacement_help': 'Replacement Mode: Replace the character in the input video with the provided character image',
-            'gpu_memory_warning': 'Note: This operation requires significant GPU memory. Recommended to use GPU with 80GB+ VRAM',
-            'install_notice': 'Ensure all dependencies and model checkpoints are installed'
+            'gpu_memory_warning': 'Note: This operation requires significant GPU memory. 24GB VRAM works (slower), 80GB+ recommended',
+            'install_notice': 'Ensure all dependencies and model checkpoints are installed',
+            'model_download': 'Model Download',
+            'download_model_btn': 'Download Model',
+            'model_status': 'Model Status',
+            'model_found': 'Model Ready',
+            'model_missing': 'Model Not Found',
+            'downloading_model': 'Downloading model...',
+            'download_complete': 'Model download completed',
+            'download_failed': 'Model download failed',
+            'auto_download_info': 'System will automatically detect and download required models',
+            'disk_space_warning': 'Download requires approximately 30GB disk space',
+            'model_path_auto': 'Will be automatically set to downloaded model path'
         }
     }
 
@@ -212,6 +247,8 @@ class WanAnimateGUI:
     def __init__(self):
         self.processor = WanAnimateProcessor()
         self.current_lang = 'zh'
+        self.model_manager = ModelManager(".")
+        self.auto_download_enabled = True
 
     def get_text(self, key: str) -> str:
         return LanguageManager.get_text(self.current_lang, key)
@@ -221,13 +258,47 @@ class WanAnimateGUI:
         self.current_lang = lang
         return self.create_interface()
 
+    def check_and_download_model(self, ckpt_path: str, progress=None) -> Tuple[bool, str, str]:
+        """检查模型是否存在，如果不存在则尝试下载"""
+        # 如果用户指定了自定义路径且存在，直接使用
+        if ckpt_path and ckpt_path != "./Wan2.2-Animate-14B" and os.path.exists(ckpt_path):
+            return True, ckpt_path, self.get_text('model_found')
+
+        # 检查默认模型是否存在
+        exists, msg = self.model_manager.check_model_exists("animate-14B")
+        if exists:
+            return True, msg, self.get_text('model_found')
+
+        # 如果启用自动下载，尝试下载模型
+        if self.auto_download_enabled:
+            if progress:
+                progress(0.1, self.get_text('downloading_model'))
+
+            def download_progress(percent, message):
+                if progress:
+                    progress(0.1 + percent * 0.4, f"{self.get_text('downloading_model')} {percent*100:.1f}%")
+
+            success, result_msg = self.model_manager.download_model("animate-14B", download_progress)
+
+            if success:
+                # 重新检查模型路径
+                exists, model_path = self.model_manager.check_model_exists("animate-14B")
+                if exists:
+                    return True, model_path, self.get_text('download_complete')
+
+            return False, "", f"{self.get_text('download_failed')}: {result_msg}"
+
+        return False, "", self.get_text('model_missing')
+
     def validate_inputs(self, video, image, ckpt_path):
         """验证输入"""
         if video is None or image is None:
             return False, self.get_text('invalid_inputs')
 
-        if not os.path.exists(ckpt_path):
-            return False, self.get_text('model_not_found')
+        # 使用新的模型检查逻辑
+        model_ok, _, msg = self.check_and_download_model(ckpt_path)
+        if not model_ok:
+            return False, msg
 
         return True, ""
 
@@ -235,13 +306,22 @@ class WanAnimateGUI:
                            refert_num, use_relighting, progress=gr.Progress()):
         """完整的处理和生成流程"""
         try:
-            # 验证输入
-            valid, error_msg = self.validate_inputs(video, image, ckpt_path)
-            if not valid:
-                return None, error_msg
+            # 验证基本输入
+            if video is None or image is None:
+                return None, self.get_text('invalid_inputs')
+
+            # 检查和下载模型
+            progress(0.05, desc="Checking model...")
+            model_ok, actual_ckpt_path, model_msg = self.check_and_download_model(ckpt_path, progress)
+
+            if not model_ok:
+                return None, model_msg
+
+            # 使用实际的模型路径
+            ckpt_path = actual_ckpt_path
 
             # 预处理
-            progress(0.1, desc=self.get_text('processing'))
+            progress(0.5, desc=self.get_text('processing'))
             success, msg = self.processor.preprocess(
                 video, image, mode, ckpt_path, resolution
             )
@@ -249,10 +329,10 @@ class WanAnimateGUI:
             if not success:
                 return None, f"{self.get_text('error_occurred')}: {msg}"
 
-            progress(0.5, desc=self.get_text('preprocessing_complete'))
+            progress(0.7, desc=self.get_text('preprocessing_complete'))
 
             # 生成视频
-            progress(0.7, desc=self.get_text('processing'))
+            progress(0.8, desc=self.get_text('processing'))
             success, msg, output_video = self.processor.generate(
                 mode, ckpt_path, refert_num, use_relighting
             )
@@ -265,6 +345,33 @@ class WanAnimateGUI:
 
         except Exception as e:
             return None, f"{self.get_text('error_occurred')}: {str(e)}"
+
+    def download_model_only(self, progress=gr.Progress()):
+        """仅下载模型"""
+        try:
+            progress(0.1, self.get_text('downloading_model'))
+
+            def download_progress(percent, message):
+                progress(0.1 + percent * 0.9, f"{self.get_text('downloading_model')} {percent*100:.1f}%")
+
+            success, msg = self.model_manager.download_model("animate-14B", download_progress)
+
+            if success:
+                progress(1.0, self.get_text('download_complete'))
+                return self.get_text('download_complete')
+            else:
+                return f"{self.get_text('download_failed')}: {msg}"
+
+        except Exception as e:
+            return f"{self.get_text('download_failed')}: {str(e)}"
+
+    def check_model_status(self):
+        """检查模型状态"""
+        exists, msg = self.model_manager.check_model_exists("animate-14B")
+        if exists:
+            return f"✅ {self.get_text('model_found')}: {msg}"
+        else:
+            return f"❌ {self.get_text('model_missing')}: {msg}"
 
     def clear_all(self):
         """清空所有内容"""
@@ -346,8 +453,37 @@ class WanAnimateGUI:
                         ckpt_path_textbox = gr.Textbox(
                             value='./Wan2.2-Animate-14B',
                             label=self.get_text('ckpt_path_label'),
-                            placeholder='/path/to/Wan2.2-Animate-14B'
+                            placeholder='/path/to/Wan2.2-Animate-14B',
+                            info=self.get_text('model_path_auto')
                         )
+
+                    # 模型下载区域
+                    with gr.Accordion(self.get_text('model_download'), open=False):
+                        gr.HTML(f"""
+                        <div class="help-box">
+                            💾 {self.get_text('auto_download_info')}<br>
+                            💿 {self.get_text('disk_space_warning')}
+                        </div>
+                        """)
+
+                        model_status_text = gr.Textbox(
+                            label=self.get_text('model_status'),
+                            value=self.check_model_status(),
+                            interactive=False,
+                            lines=2
+                        )
+
+                        with gr.Row():
+                            check_model_btn = gr.Button(
+                                "🔍 Check Model",
+                                variant="secondary",
+                                scale=1
+                            )
+                            download_model_btn = gr.Button(
+                                f"⬇️ {self.get_text('download_model_btn')}",
+                                variant="primary",
+                                scale=2
+                            )
 
                     # 高级设置
                     with gr.Accordion(self.get_text('advanced_settings'), open=False):
@@ -407,6 +543,18 @@ class WanAnimateGUI:
             clear_btn.click(
                 fn=self.clear_all,
                 outputs=[video_input, image_input, output_video, status_textbox]
+            )
+
+            # 模型管理事件
+            check_model_btn.click(
+                fn=self.check_model_status,
+                outputs=[model_status_text]
+            )
+
+            download_model_btn.click(
+                fn=self.download_model_only,
+                outputs=[model_status_text],
+                show_progress=True
             )
 
             # 语言切换 (暂时禁用，因为需要重新创建界面)

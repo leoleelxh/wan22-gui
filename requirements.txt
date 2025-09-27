@@ -5,6 +5,9 @@
 # Web Interface
 gradio>=5.47.0
 
+# Model Download
+huggingface_hub[cli]>=0.33.5
+
 # Base requirements (should be installed from Wan2.2)
 # torch>=2.4.0
 # torchvision>=0.19.0

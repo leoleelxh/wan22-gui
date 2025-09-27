@@ -17,6 +17,8 @@ A user-friendly Gradio web interface for Wan2.2-Animate model, supporting charac
 - 🎛️ **Advanced Settings**: Resolution selection, reference frame count, relighting LoRA
 - 🚀 **Easy to Use**: Web-based interface with drag-and-drop functionality
 - ⚡ **Real-time Progress**: Live progress tracking and error handling
+- 📦 **Auto Model Download**: Automatic Wan2.2-Animate-14B model download
+- 💾 **Smart Model Management**: Model status checking and validation
 
 ### Quick Start
 
@@ -24,13 +26,14 @@ A user-friendly Gradio web interface for Wan2.2-Animate model, supporting charac
    ```bash
    # In your Wan2.2 project directory
    conda activate wan
-   pip install gradio
+   pip install gradio huggingface_hub[cli]
    pip install -r requirements.txt
    pip install -r requirements_animate.txt
    ```
 
-2. **Download Model**
+2. **Download Model (Optional - Auto Download Available)**
    ```bash
+   # Manual download (optional - GUI can auto-download)
    huggingface-cli download Wan-AI/Wan2.2-Animate-14B --local-dir ./Wan2.2-Animate-14B
    ```
 
@@ -44,15 +47,16 @@ A user-friendly Gradio web interface for Wan2.2-Animate model, supporting charac
 
 ### System Requirements
 
-- **GPU**: 80GB+ VRAM recommended (A100/H100)
+- **GPU**: 24GB+ VRAM (RTX 4090 works, slower) or 80GB+ VRAM (recommended for optimal performance)
 - **CPU**: Multi-core processor
 - **RAM**: 32GB+
-- **Storage**: 100GB+ available space
+- **Storage**: 100GB+ available space (30GB for model download)
 - **OS**: Linux (Ubuntu 20.04+ recommended)
 
 ### Files
 
-- `wan_animate_gui.py` - Main GUI application
+- `wan_animate_gui.py` - Main GUI application with auto-download
+- `model_manager.py` - Automatic model download and management
 - `start_gui.sh` - Startup script
 - `demo_gui.py` - Demo and test script
 - `GUI_README.md` - Detailed usage guide
@@ -114,15 +118,16 @@ This project follows the Apache 2.0 License, same as the original Wan2.2 project
 
 ### 系统要求
 
-- **GPU**：建议80GB+显存 (A100/H100)
+- **GPU**：24GB+显存 (RTX 4090可用，速度较慢) 或 80GB+显存 (推荐最佳性能)
 - **CPU**：多核处理器
 - **内存**：32GB+
-- **存储**：100GB+可用空间
+- **存储**：100GB+可用空间 (模型下载需要30GB)
 - **操作系统**：Linux (推荐Ubuntu 20.04+)
 
 ### 文件说明
 
-- `wan_animate_gui.py` - 主GUI应用
+- `wan_animate_gui.py` - 主GUI应用（支持自动下载）
+- `model_manager.py` - 自动模型下载和管理
 - `start_gui.sh` - 启动脚本
 - `demo_gui.py` - 演示和测试脚本
 - `GUI_README.md` - 详细使用指南
